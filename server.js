@@ -58,30 +58,31 @@ app.post("/signup", async (req, res) => {
 
 app.post("/login", async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const user = await User.findOne({ email: req.body.email });
 
-    const user = await User.findOne({ email });
+    if (user) {
+      // Vérifiez si le mot de passe correspond
+      const hashedPassword = SHA256(req.body.password + user.salt).toString(
+        encBase64
+      );
 
-    if (!user) {
-      return res.status(400).json({ message: "Cet e-mail n'existe pas." });
+      if (hashedPassword === user.hash) {
+        // Génération d'un nouveau token
+        const token = uid2(16);
+        user.token = token;
+        await user.save();
+
+        res.status(200).json({
+          _id: user._id,
+          token: user.token,
+          username: user.username, // Vous pouvez inclure d'autres informations de l'utilisateur si nécessaire
+        });
+      } else {
+        res.status(401).json({ message: "Mot de passe incorrect." });
+      }
+    } else {
+      res.status(400).json({ message: "Utilisateur non trouvé." });
     }
-
-    // Comparer le mot de passe soumis avec le mot de passe haché stocké
-    const hashedPassword = SHA256(password + user.salt).toString(encBase64);
-
-    if (hashedPassword !== user.password) {
-      return res.status(400).json({ message: "Mot de passe incorrect." });
-    }
-
-    // Génération d'un jeton d'authentification
-    const token = uid2(16);
-
-    // Stocker le jeton dans la base de données (par exemple, dans le document de l'utilisateur)
-    user.token = token;
-    await user.save();
-
-    // Authentification réussie
-    return res.status(200).json({ message: "Connexion réussie !", token });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Erreur lors de la connexion." });
